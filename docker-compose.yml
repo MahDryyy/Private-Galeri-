@@ -1,0 +1,44 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    container_name: personal-gallery-backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      GALLERY_ROOT: /data/gallery
+      THUMBNAIL_DIR: /data/cache/thumbnails
+      APP_DATA_DIR: /data/app
+      PORT: "8080"
+    volumes:
+      - ${GALLERY_HOST_PATH:-/home/secreat/Secreat_data}:/data/gallery
+      - app-data:/data/app
+      - thumb-cache:/data/cache
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/health"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        BACKEND_URL: http://backend:8080
+    container_name: personal-gallery-frontend
+    restart: unless-stopped
+    environment:
+      BACKEND_URL: http://backend:8080
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  app-data:
+  thumb-cache:

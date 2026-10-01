@@ -1,0 +1,1387 @@
+Saya ingin membuat aplikasi Personal Photo & Video Gallery yang bersifat PRIVATE dan SELF-HOSTED.
+
+Aplikasi ini bukan untuk klinik dan tidak berhubungan dengan project klinik.
+
+Tujuan utama aplikasi:
+Membuat aplikasi seperti gabungan Google Photos + File Manager pribadi untuk mengelola foto dan video yang sudah ada di server.
+
+==================================================
+1. STORAGE UTAMA
+==================================================
+
+Folder media yang SUDAH ADA di server adalah:
+
+/home/secreat/Secreat_data
+
+JANGAN memindahkan file yang sudah ada.
+
+JANGAN melakukan migrasi semua foto/video ke database.
+
+JANGAN membuat storage baru untuk menyimpan file media utama.
+
+Aplikasi HARUS membaca dan mengelola file secara langsung dari:
+
+/home/secreat/Secreat_data
+
+Folder tersebut berisi foto dan video yang sudah ada.
+
+Contoh file:
+
+IMG_0360.jpeg
+IMG_0361.jpeg
+IMG_0526.jpeg
+IMG_3850.jpeg
+IMG_3903.jpeg
+*.jpg
+*.jpeg
+*.png
+*.webp
+*.heic
+*.mp4
+*.mov
+dan format media lainnya.
+
+Semua file tersebut harus tetap berada di filesystem.
+
+Database hanya boleh digunakan untuk metadata tambahan jika memang diperlukan.
+
+==================================================
+2. TEKNOLOGI
+==================================================
+
+Gunakan:
+
+Frontend:
+- Next.js
+- TypeScript
+- Tailwind CSS
+- responsive design
+
+Backend:
+- Go
+- Gin
+
+Storage:
+- Filesystem
+
+Database:
+- Tidak wajib untuk V1.
+- Jangan membuat database hanya untuk menyimpan daftar file.
+- Filesystem adalah source of truth.
+
+Deployment:
+- Docker
+- Docker Compose
+
+Reverse proxy bisa ditambahkan jika diperlukan.
+
+==================================================
+3. DOCKER STORAGE
+==================================================
+
+Backend container harus mendapatkan akses:
+
+/home/secreat/Secreat_data
+
+dengan mount:
+
+/home/secreat/Secreat_data:/data/gallery
+
+Di dalam container:
+
+GALLERY_ROOT=/data/gallery
+
+Backend TIDAK boleh mendapatkan akses ke:
+
+/home/secreat
+
+secara keseluruhan.
+
+Hanya folder:
+
+/home/secreat/Secreat_data
+
+yang boleh di-mount.
+
+Jangan menggunakan:
+
+chmod 777
+
+Gunakan permission filesystem yang aman.
+
+==================================================
+4. FITUR UTAMA
+==================================================
+
+Aplikasi harus memiliki fitur:
+
+A. BROWSE FOTO DAN VIDEO
+
+Tampilkan seluruh isi:
+
+/data/gallery
+
+secara recursive.
+
+User dapat melihat:
+
+- folder
+- subfolder
+- foto
+- video
+
+Layout utama berupa grid seperti Google Photos.
+
+Contoh:
+
+------------------------------------------------
+Gallery
+------------------------------------------------
+
+[Folder Liburan]
+[Folder Keluarga]
+[Folder Kerja]
+[Folder Random]
+
+[IMG] [IMG] [IMG] [IMG]
+[IMG] [IMG] [VID] [IMG]
+[IMG] [IMG] [IMG] [VID]
+
+------------------------------------------------
+
+B. FOLDER
+
+User dapat:
+
+- membuat folder
+- membuka folder
+- membuat subfolder
+- rename folder
+- menghapus folder
+- memindahkan folder
+
+Contoh:
+
+/data/gallery
+    /Keluarga
+    /Liburan
+        /Bali
+        /Malang
+    /Kerja
+    /Random
+
+Folder yang dibuat melalui UI harus benar-benar dibuat di filesystem.
+
+Jangan hanya membuat folder virtual di database.
+
+==================================================
+5. UPLOAD
+==================================================
+
+User dapat upload:
+
+- JPG
+- JPEG
+- PNG
+- WEBP
+- HEIC
+- GIF
+- MP4
+- MOV
+- AVI
+- MKV
+- dan format media umum lainnya jika aman.
+
+Upload harus langsung masuk ke folder yang sedang dibuka.
+
+Contoh:
+
+User membuka:
+
+/Liburan/Bali
+
+kemudian upload:
+
+IMG_001.jpg
+IMG_002.jpg
+video001.mp4
+
+hasil:
+
+/data/gallery/Liburan/Bali/IMG_001.jpg
+/data/gallery/Liburan/Bali/IMG_002.jpg
+/data/gallery/Liburan/Bali/video001.mp4
+
+Support:
+
+- multiple file upload
+- drag & drop upload
+- progress upload
+- upload status
+- error handling
+
+==================================================
+6. RENAME
+==================================================
+
+User dapat rename:
+
+- file
+- foto
+- video
+- folder
+
+Contoh:
+
+IMG_0360.jpeg
+
+menjadi:
+
+Pantai Bali 2026.jpeg
+
+Pastikan:
+
+- nama tidak kosong
+- tidak boleh mengandung path traversal
+- tidak boleh menggunakan nama folder sebagai escape path
+- jangan sampai user bisa menulis ke luar GALLERY_ROOT.
+
+==================================================
+7. MOVE FILE
+==================================================
+
+User dapat memindahkan:
+
+- foto
+- video
+- file
+- folder
+
+Contoh:
+
+/Random/IMG_0360.jpeg
+
+dipindahkan ke:
+
+/Liburan/Bali/IMG_0360.jpeg
+
+Support:
+
+- select satu file
+- multi-select
+- move selected
+- pilih folder tujuan
+- drag & drop jika memungkinkan
+
+Saat file dipindahkan:
+
+JANGAN membuat copy.
+
+Gunakan filesystem rename/move.
+
+==================================================
+8. DELETE
+==================================================
+
+User dapat menghapus:
+
+- foto
+- video
+- file
+- folder
+
+Sebelum delete harus ada confirmation dialog.
+
+Contoh:
+
+"Apakah Anda yakin ingin menghapus 5 file?"
+
+Untuk folder:
+
+"Folder ini berisi 234 file. Hapus seluruh folder beserta isinya?"
+
+Delete harus benar-benar menghapus filesystem file/folder.
+
+Endpoint delete harus membutuhkan authentication.
+
+==================================================
+9. PHOTO VIEWER
+==================================================
+
+Ketika user klik foto:
+
+buka fullscreen/lightbox.
+
+Fitur:
+
+- next
+- previous
+- zoom
+- close
+- fullscreen
+- download
+- metadata dasar jika tersedia
+
+Jangan langsung load original berukuran besar untuk grid.
+
+==================================================
+10. VIDEO PLAYER
+==================================================
+
+Jika file merupakan video:
+
+tampilkan video player.
+
+Support:
+
+- play
+- pause
+- seek
+- volume
+- fullscreen
+
+Gunakan browser native video player jika memungkinkan.
+
+Jangan download seluruh video ke browser sebelum playback jika HTTP range request dapat digunakan.
+
+Backend harus mendukung:
+
+HTTP Range Request
+
+untuk video streaming.
+
+==================================================
+11. THUMBNAIL
+==================================================
+
+Aplikasi harus menggunakan thumbnail untuk grid.
+
+JANGAN menampilkan file original resolusi tinggi untuk setiap item di halaman gallery.
+
+Contoh:
+
+Original:
+
+4000x3000
+8 MB
+
+Thumbnail:
+
+300x225
+sekitar puluhan KB
+
+Thumbnail digunakan hanya untuk grid.
+
+Ketika foto dibuka:
+
+gunakan original.
+
+Original file tidak boleh diubah.
+
+Thumbnail dapat disimpan di:
+
+/data/gallery/.thumbnails
+
+atau storage cache terpisah yang tetap berada dalam volume aplikasi.
+
+Jika memungkinkan, thumbnail dibuat secara lazy/on-demand.
+
+Artinya thumbnail baru dibuat ketika diperlukan.
+
+Jangan scan dan memproses ribuan foto setiap kali halaman dibuka.
+
+==================================================
+12. THUMBNAIL VIDEO
+==================================================
+
+Untuk video:
+
+buat thumbnail frame pertama atau frame representative.
+
+Jika FFmpeg digunakan:
+
+gunakan FFmpeg di backend/container.
+
+Thumbnail video digunakan di grid.
+
+Saat dibuka baru gunakan video asli.
+
+==================================================
+13. SORTING
+==================================================
+
+Gallery harus memiliki sorting:
+
+- terbaru
+- terlama
+- nama A-Z
+- nama Z-A
+- ukuran terbesar
+- ukuran terkecil
+
+Jika memungkinkan tambahkan:
+
+- tanggal file
+- ukuran file
+- tipe file
+
+==================================================
+14. SEARCH
+==================================================
+
+Tambahkan search berdasarkan:
+
+- nama file
+- nama folder
+
+Contoh:
+
+User mengetik:
+
+IMG_0360
+
+hasil:
+
+IMG_0360.jpeg
+
+User mengetik:
+
+Bali
+
+tampilkan file/folder yang memiliki nama Bali.
+
+Untuk V1 tidak perlu AI search.
+
+==================================================
+15. MULTI SELECT
+==================================================
+
+User dapat:
+
+- klik file
+- Ctrl/Command click
+- checkbox
+- select all
+- multi-select
+
+Setelah memilih beberapa file tampilkan toolbar:
+
+[Download]
+[Move]
+[Delete]
+[Rename jika hanya 1 item]
+[Cancel]
+
+==================================================
+16. DRAG AND DROP
+==================================================
+
+Jika memungkinkan:
+
+drag file ke folder.
+
+Contoh:
+
+IMG_001.jpg
+
+drag ke:
+
+Bali
+
+maka:
+
+/IMG_001.jpg
+
+menjadi:
+
+/Bali/IMG_001.jpg
+
+Harus ada confirmation jika diperlukan.
+
+==================================================
+17. AUTHENTICATION
+==================================================
+
+Aplikasi bersifat PRIVATE.
+
+Tidak boleh semua orang langsung bisa membuka gallery.
+
+Buat sistem login.
+
+Minimal:
+
+username
+password
+
+Password harus disimpan menggunakan:
+
+Argon2id
+
+atau bcrypt jika implementasi Argon2id tidak memungkinkan.
+
+JANGAN menyimpan password plaintext.
+
+==================================================
+18. SESSION SECURITY
+==================================================
+
+Gunakan secure cookie.
+
+Cookie:
+
+HttpOnly
+Secure
+SameSite=Lax
+
+Session memiliki expiration.
+
+Logout harus benar-benar menghapus/invalidate session.
+
+==================================================
+19. WEBAUTHN / PASSKEY
+==================================================
+
+Tambahkan opsi login menggunakan:
+
+WebAuthn / Passkey.
+
+Tujuannya agar user dapat menggunakan:
+
+Windows Hello
+Face ID
+Touch ID
+fingerprint
+PIN perangkat
+
+PENTING:
+
+Aplikasi TIDAK boleh menyimpan foto wajah user.
+
+Aplikasi TIDAK boleh menyimpan face image.
+
+Aplikasi TIDAK perlu melakukan face recognition untuk login.
+
+Gunakan WebAuthn.
+
+Contoh flow:
+
+Login
+   ↓
+Passkey
+   ↓
+Windows Hello / Face ID
+   ↓
+Authenticated
+   ↓
+Gallery
+
+Jika WebAuthn terlalu kompleks untuk V1, buat:
+
+V1:
+username + password
+
+V2:
+WebAuthn / Passkey
+
+Tetapi struktur backend harus disiapkan supaya WebAuthn mudah ditambahkan.
+
+==================================================
+20. SECURITY PATH TRAVERSAL
+==================================================
+
+INI SANGAT PENTING.
+
+Semua operasi filesystem harus dibatasi di:
+
+GALLERY_ROOT=/data/gallery
+
+User tidak boleh melakukan:
+
+../
+../../
+/etc/passwd
+/etc
+/root
+/home/secreat
+
+Contoh request berbahaya:
+
+/api/gallery?path=../../etc
+
+HARUS ditolak.
+
+Backend harus:
+
+1. resolve path
+2. memastikan path berada di dalam GALLERY_ROOT
+3. baru melakukan operasi filesystem.
+
+Jangan percaya path dari client.
+
+==================================================
+21. UPLOAD SECURITY
+==================================================
+
+Validasi:
+
+- filename
+- extension
+- MIME type
+- ukuran file
+
+Tolak file executable/script berbahaya seperti:
+
+.php
+.exe
+.sh
+.bat
+.cmd
+.js
+
+kecuali memang diperlukan.
+
+Jangan menjalankan file yang diupload.
+
+Batasi maksimal ukuran upload menggunakan environment variable.
+
+Contoh:
+
+MAX_UPLOAD_SIZE=10GB
+
+Tetapi konfigurasi harus mudah diubah.
+
+==================================================
+22. API BACKEND
+==================================================
+
+Buat API yang clean.
+
+Contoh:
+
+GET
+/api/gallery
+
+GET
+/api/gallery/browse?path=/Liburan
+
+POST
+/api/gallery/upload
+
+POST
+/api/gallery/folder
+
+POST
+/api/gallery/move
+
+POST
+/api/gallery/rename
+
+DELETE
+/api/gallery/file
+
+DELETE
+/api/gallery/folder
+
+GET
+/api/gallery/file
+
+GET
+/api/gallery/thumbnail
+
+GET
+/api/auth/me
+
+POST
+/api/auth/login
+
+POST
+/api/auth/logout
+
+Jika struktur API yang lebih baik diperlukan, silakan gunakan struktur REST yang lebih aman.
+
+==================================================
+23. FRONTEND UI
+==================================================
+
+UI harus modern.
+
+Tema:
+
+Dark mode sebagai default.
+
+Style:
+
+minimal
+modern
+clean
+smooth
+responsive
+
+Desktop:
+
+sidebar kiri.
+
+Contoh:
+
+---------------------------------------------
+| Gallery                                  |
+---------------------------------------------
+| 📁 All Photos                            |
+| 📁 Videos                                |
+| 📁 Folders                               |
+|                                          |
+| + New Folder                             |
+| ↑ Upload                                 |
+|                                          |
+| Settings                                 |
+---------------------------------------------
+
+Area utama:
+
+Breadcrumb:
+
+Home / Liburan / Bali
+
+Toolbar:
+
+Search
+Sort
+Select
+Upload
+New Folder
+
+Grid:
+
+[photo] [photo] [photo] [video]
+[photo] [photo] [photo] [photo]
+
+==================================================
+24. RESPONSIVE
+==================================================
+
+Harus bisa digunakan di:
+
+Desktop
+Laptop
+Tablet
+Mobile
+
+Di mobile:
+
+sidebar menjadi drawer.
+
+Grid menyesuaikan ukuran layar.
+
+==================================================
+25. PERFORMANCE
+==================================================
+
+Aplikasi harus dirancang untuk:
+
+1.000 foto
+5.000 foto
+10.000+ foto
+
+Jangan melakukan:
+
+- membaca semua file original ke memory
+- mengirim semua metadata sekaligus jika tidak diperlukan
+- membuat thumbnail seluruh library setiap request
+
+Gunakan:
+
+pagination
+lazy loading
+thumbnail
+virtualized grid jika diperlukan
+HTTP caching
+
+Jika folder berisi 10.000 file:
+
+jangan render 10.000 DOM element sekaligus jika bisa dihindari.
+
+==================================================
+26. FILESYSTEM SCAN
+==================================================
+
+Karena file bisa saja sudah ada sebelum aplikasi dibuat, aplikasi harus bisa membaca filesystem yang sudah ada.
+
+Jangan menganggap semua file berasal dari upload aplikasi.
+
+Contoh:
+
+/data/gallery
+    IMG_001.jpg
+    IMG_002.jpg
+    Liburan/
+    Keluarga/
+
+Aplikasi harus langsung mendeteksi file tersebut.
+
+Tambahkan endpoint atau mekanisme:
+
+POST /api/gallery/scan
+
+untuk melakukan scan filesystem jika diperlukan.
+
+Scan tidak boleh mengubah file asli.
+
+==================================================
+27. PHOTO METADATA
+==================================================
+
+Jika memungkinkan, baca metadata:
+
+- width
+- height
+- file size
+- MIME
+- modified date
+- EXIF date
+- GPS jika tersedia
+
+Tetapi:
+
+JANGAN mengubah file asli.
+
+EXIF harus bersifat read-only.
+
+==================================================
+28. FAVORITES
+==================================================
+
+Jika ingin menggunakan database, database dapat digunakan untuk metadata seperti:
+
+- favorite
+- tag
+- album
+- user
+- session
+
+Tetapi file tetap berada di filesystem.
+
+Jangan menyimpan binary image/video di database.
+
+==================================================
+29. FACE RECOGNITION
+==================================================
+
+Untuk V1 JANGAN implementasikan face recognition.
+
+Siapkan arsitektur supaya nanti bisa ditambahkan.
+
+Future:
+
+scan foto
+↓
+detect face
+↓
+generate face embedding
+↓
+cluster person
+↓
+"People"
+
+Tetapi jangan memasukkan fitur ini ke V1 jika membuat project terlalu kompleks.
+
+==================================================
+30. DOWNLOAD
+==================================================
+
+User dapat:
+
+- download satu file
+- download beberapa file
+- jika multiple files, buat ZIP secara streaming/temp storage.
+
+Jangan membuat ZIP permanen di media folder.
+
+==================================================
+31. LOGGING
+==================================================
+
+Backend harus memiliki log:
+
+LOGIN
+LOGOUT
+UPLOAD
+MOVE
+RENAME
+DELETE
+CREATE_FOLDER
+
+Tetapi jangan log:
+
+password
+session cookie
+sensitive authentication token
+
+==================================================
+32. ERROR HANDLING
+==================================================
+
+API harus memiliki response JSON konsisten.
+
+Contoh:
+
+{
+  "success": false,
+  "message": "File tidak ditemukan"
+}
+
+HTTP status harus benar:
+
+400
+401
+403
+404
+409
+413
+500
+
+==================================================
+33. DOCKER
+==================================================
+
+BUAT DOCKER COMPOSE YANG LANGSUNG BISA DIJALANKAN.
+
+Struktur:
+
+personal-gallery/
+│
+├── docker-compose.yml
+│
+├── backend/
+│   ├── Dockerfile
+│   ├── go.mod
+│   ├── main.go
+│   └── ...
+│
+├── frontend/
+│   ├── Dockerfile
+│   ├── package.json
+│   ├── next.config.ts
+│   └── ...
+│
+├── .env.example
+└── README.md
+
+Docker Compose harus menjalankan:
+
+frontend
+backend
+
+Jika thumbnail/video membutuhkan FFmpeg:
+
+install FFmpeg hanya di backend container.
+
+==================================================
+34. DOCKER COMPOSE
+==================================================
+
+Buat compose yang kurang lebih memiliki konsep:
+
+services:
+
+  backend:
+    build:
+      context: ./backend
+    container_name: personal-gallery-backend
+    restart: unless-stopped
+
+    environment:
+      GALLERY_ROOT: /data/gallery
+      PORT: 8080
+      MAX_UPLOAD_SIZE: 10GB
+
+    volumes:
+      - /home/secreat/Secreat_data:/data/gallery
+
+    ports:
+      - "8080:8080"
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: personal-gallery-frontend
+    restart: unless-stopped
+
+    ports:
+      - "3000:3000"
+
+    depends_on:
+      - backend
+
+Jangan expose filesystem secara langsung ke frontend.
+
+Frontend hanya berkomunikasi dengan backend API.
+
+==================================================
+35. ENV
+==================================================
+
+Buat:
+
+.env.example
+
+Contoh:
+
+GALLERY_ROOT=/data/gallery
+PORT=8080
+
+MAX_UPLOAD_SIZE=10GB
+
+SESSION_SECRET=CHANGE_ME
+
+ADMIN_USERNAME=admin
+
+ADMIN_PASSWORD=CHANGE_ME
+
+NEXT_PUBLIC_API_URL=http://localhost:8080
+
+Untuk production jangan hardcode secret.
+
+README harus menjelaskan cara membuat .env.
+
+==================================================
+36. DOCKER COMMAND
+==================================================
+
+README harus memberikan command:
+
+git clone ...
+
+cd personal-gallery
+
+cp .env.example .env
+
+docker compose build
+
+docker compose up -d
+
+docker compose ps
+
+docker compose logs -f
+
+Aplikasi harus bisa dibuka:
+
+http://SERVER_IP:3000
+
+Backend:
+
+http://SERVER_IP:8080
+
+==================================================
+37. HEALTH CHECK
+==================================================
+
+Backend:
+
+GET /health
+
+Response:
+
+{
+  "status": "ok"
+}
+
+Docker Compose harus memiliki healthcheck jika memungkinkan.
+
+==================================================
+38. BACKUP
+==================================================
+
+Jangan pernah menghapus atau memodifikasi file existing saat startup.
+
+Jangan menjalankan script yang:
+
+rm -rf /data/gallery
+
+Jangan melakukan automatic migration yang berisiko terhadap media.
+
+==================================================
+39. STARTUP BEHAVIOR
+==================================================
+
+Saat container pertama kali dijalankan:
+
+1. Backend start
+2. Check GALLERY_ROOT
+3. Pastikan folder tersedia
+4. Jangan menghapus file
+5. Jangan memindahkan file
+6. Jangan rename file
+7. Jangan mengubah permission secara agresif
+8. Gallery langsung membaca isi folder.
+
+==================================================
+40. UX
+==================================================
+
+Tambahkan:
+
+- loading skeleton
+- empty state
+- upload progress
+- toast notification
+- confirmation dialog
+- error notification
+- breadcrumb
+- keyboard navigation jika memungkinkan
+- ESC untuk close viewer
+- arrow left/right untuk next/previous photo
+- Ctrl+A untuk select all
+- Delete untuk delete selected dengan confirmation
+
+==================================================
+41. ARSITEKTUR
+==================================================
+
+Pisahkan dengan jelas:
+
+Frontend
+↓
+REST API
+↓
+Go Backend
+↓
+Filesystem
+
+Jangan:
+
+Frontend
+↓
+langsung filesystem
+
+Frontend tidak boleh memiliki akses filesystem server.
+
+==================================================
+42. CODE QUALITY
+==================================================
+
+Saya ingin source code yang benar-benar bisa dijalankan.
+
+Jangan hanya memberikan mockup.
+
+Jangan membuat API palsu.
+
+Jangan membuat tombol yang belum memiliki fungsi.
+
+Semua tombol utama harus benar-benar terhubung ke backend.
+
+Gunakan:
+
+TypeScript strict mode.
+
+Go error handling yang proper.
+
+Pisahkan:
+
+handler
+service
+filesystem
+auth
+middleware
+thumbnail
+config
+
+Jika menggunakan database, pisahkan repository.
+
+==================================================
+43. README
+==================================================
+
+Buat README lengkap yang menjelaskan:
+
+1. Requirement
+2. Folder structure
+3. Environment
+4. Docker installation
+5. First startup
+6. Login
+7. Upload
+8. Folder
+9. Move
+10. Rename
+11. Delete
+12. Thumbnail
+13. Backup
+14. Security
+15. Troubleshooting
+16. Cara mengganti port
+17. Cara mengganti media directory
+18. Cara update aplikasi
+
+==================================================
+44. OUTPUT YANG SAYA INGINKAN
+==================================================
+
+Jangan hanya menjelaskan konsep.
+
+Buat PROJECT LENGKAP.
+
+Output minimal harus mencakup:
+
+- docker-compose.yml
+- backend Dockerfile
+- frontend Dockerfile
+- Go backend source
+- Next.js frontend source
+- authentication
+- filesystem API
+- upload
+- folder
+- rename
+- move
+- delete
+- thumbnail
+- video streaming
+- responsive UI
+- .env.example
+- README
+
+Pastikan project dapat:
+
+docker compose build
+
+dan:
+
+docker compose up -d
+
+tanpa error.
+
+==================================================
+45. PRIORITAS DEVELOPMENT
+==================================================
+
+Implementasikan secara bertahap:
+
+PHASE 1
+- Login
+- Browse folder
+- Foto
+- Video
+- Upload
+- Create folder
+
+PHASE 2
+- Rename
+- Move
+- Delete
+- Multi select
+
+PHASE 3
+- Thumbnail
+- Video thumbnail
+- Lazy loading
+- Performance
+
+PHASE 4
+- WebAuthn / Passkey
+
+PHASE 5
+- Favorites
+- Search
+- Tags
+- Album
+
+Jangan membuat Phase 5 mengganggu fitur Phase 1-3.
+
+==================================================
+46. HAL YANG DILARANG
+==================================================
+
+JANGAN:
+
+- memindahkan existing files
+- menghapus existing files saat startup
+- menyimpan foto sebagai BLOB database
+- expose /home/secreat ke container
+- menggunakan chmod 777
+- membiarkan path traversal
+- membuat frontend mengakses filesystem
+- menyimpan password plaintext
+- memasukkan secret ke Git
+- menggunakan mock API untuk fitur production
+- membuat tombol palsu
+- mengubah nama file existing tanpa perintah user
+
+==================================================
+47. HASIL AKHIR
+==================================================
+
+Saya ingin ketika selesai:
+
+Server:
+
+/home/secreat/Secreat_data
+        ↓
+Docker volume mount
+        ↓
+/data/gallery
+        ↓
+Go Backend
+        ↓
+Next.js
+        ↓
+Browser
+
+Saya membuka:
+
+http://SERVER_IP:3000
+
+Login.
+
+Kemudian langsung melihat semua foto/video yang sudah ada.
+
+Saya bisa:
+
+📁 membuat folder
+⬆️ upload
+✏️ rename
+↔️ move
+🗑️ delete
+☑️ multi-select
+🔎 search
+📷 melihat foto
+🎥 menonton video
+⬇️ download
+🖱️ drag & drop
+⭐ favorite nantinya
+
+Semua perubahan harus benar-benar terjadi pada:
+
+/home/secreat/Secreat_data
+
+dan bukan hanya di database.
+
+==================================================
+48. CARA KERJA AI CODING AGENT
+==================================================
+
+Sebelum menulis code:
+
+1. Buat architecture plan.
+2. Tentukan struktur folder.
+3. Tentukan API contract.
+4. Tentukan security model.
+5. Baru implementasikan.
+
+Setelah implementasi:
+
+1. Jalankan build.
+2. Periksa error TypeScript.
+3. Periksa error Go.
+4. Periksa Docker build.
+5. Periksa docker compose config.
+6. Pastikan backend dapat membaca /data/gallery.
+7. Pastikan upload bekerja.
+8. Pastikan create folder bekerja.
+9. Pastikan rename bekerja.
+10. Pastikan move bekerja.
+11. Pastikan delete membutuhkan authentication.
+12. Pastikan path traversal ditolak.
+
+Jika menemukan error, perbaiki source code, jangan hanya menjelaskan error.
+
+Saya ingin hasil akhir berupa project yang runnable.

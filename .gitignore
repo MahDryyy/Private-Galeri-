@@ -1,0 +1,11 @@
+.env
+.env.local
+node_modules/
+frontend/.next/
+frontend/out/
+backend/server
+*.exe
+data/
+*.db
+.DS_Store
+thumbs/
