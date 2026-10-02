@@ -9,7 +9,7 @@ FROM debian:bookworm-slim
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates ffmpeg curl python3 python3-venv \
     && python3 -m venv /opt/yt-dlp \
-    && /opt/yt-dlp/bin/pip install --no-cache-dir --upgrade yt-dlp \
+    && /opt/yt-dlp/bin/pip install --no-cache-dir --upgrade "yt-dlp[default,curl-cffi]" \
     && ln -s /opt/yt-dlp/bin/yt-dlp /usr/local/bin/yt-dlp \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /data/app /data/cache
