@@ -6,8 +6,8 @@ import (
 	"encoding/hex"
 	"fmt"
 	"image"
-	"image/jpeg"
 	_ "image/gif"
+	"image/jpeg"
 	_ "image/png"
 	"os"
 	"os/exec"
@@ -21,8 +21,8 @@ import (
 )
 
 type Service struct {
-	dir   string
-	mu    sync.Mutex
+	dir      string
+	mu       sync.Mutex
 	inflight map[string]*call
 }
 
@@ -135,7 +135,9 @@ func ffmpegThumb(src, dest string) error {
 	cmd := exec.Command(
 		"ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
 		"-ss", "0.5", "-i", src, "-frames:v", "1",
-		"-vf", "scale=360:-1", dest,
+		"-vf", "scale=360:-1",
+		"-f", "image2",
+		dest,
 	)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr

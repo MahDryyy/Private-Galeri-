@@ -13,14 +13,20 @@ import {
 import { useRouter } from "next/navigation";
 import {
   ArrowUpFromLine,
+  ChevronDown,
   CheckSquare,
+  ExternalLink,
+  Folder,
   FolderPlus,
   HardDrive,
   Image as ImageIcon,
+  Link2,
   LogOut,
   Menu,
+  Plus,
   Search,
   Settings,
+  Trash2,
   Video,
   X,
 } from "lucide-react";
@@ -29,7 +35,9 @@ import type { BrowseResult, GalleryItem } from "@/lib/types";
 
 type Toast = { id: number; text: string; kind: "ok" | "err" };
 type UploadJob = { name: string; progress: number; status: "up" | "done" | "err"; error?: string };
+type SavedLink = { id: string; title: string; url: string };
 type ViewFilter = "all" | "image" | "video" | "folders";
+const SAVED_LINKS_KEY = "personal-gallery-saved-links";
 
 const SORTS = [
   { id: "newest", label: "Terbaru" },
@@ -60,6 +68,13 @@ export default function GalleryApp() {
   const [renameTarget, setRenameTarget] = useState<GalleryItem | null>(null);
   const [tree, setTree] = useState<TreeNode | null>(null);
   const [moveDest, setMoveDest] = useState("/");
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
+  const [savedLinks, setSavedLinks] = useState<SavedLink[]>([]);
+  const [linksLoaded, setLinksLoaded] = useState(false);
+  const [linksOpen, setLinksOpen] = useState(true);
+  const [linkFormOpen, setLinkFormOpen] = useState(false);
+  const [linkTitle, setLinkTitle] = useState("");
+  const [linkUrl, setLinkUrl] = useState("");
   const [deleteMsg, setDeleteMsg] = useState("");
   const [meta, setMeta] = useState<GalleryItem | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -111,6 +126,33 @@ export default function GalleryApp() {
       .then((u) => setUsername(u.username))
       .catch(() => router.replace("/login"));
   }, [router]);
+
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(SAVED_LINKS_KEY);
+      if (stored) {
+        const parsed: unknown = JSON.parse(stored);
+        if (Array.isArray(parsed)) {
+          setSavedLinks(parsed.filter((item): item is SavedLink =>
+            typeof item?.id === "string" && typeof item?.title === "string" && typeof item?.url === "string",
+          ));
+        }
+      }
+    } catch {
+      setSavedLinks([]);
+    } finally {
+      setLinksLoaded(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!linksLoaded) return;
+    try {
+      window.localStorage.setItem(SAVED_LINKS_KEY, JSON.stringify(savedLinks));
+    } catch {
+      toast("Tautan tidak dapat disimpan di browser", "err");
+    }
+  }, [linksLoaded, savedLinks, toast]);
 
   useEffect(() => {
     if (!username) return;
@@ -168,6 +210,31 @@ export default function GalleryApp() {
   function selectAll() {
     const all = [...folders, ...mediaItems].map((i) => i.path);
     setSelected(new Set(all));
+  }
+
+  function addSavedLink(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const value = linkUrl.trim();
+    try {
+      const parsed = new URL(value);
+      if (parsed.protocol !== "http:" && parsed.protocol !== "https:") throw new Error("protocol");
+      setSavedLinks((links) => [{
+        id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        title: linkTitle.trim() || parsed.hostname,
+        url: parsed.href,
+      }, ...links]);
+      setLinkTitle("");
+      setLinkUrl("");
+      setLinkFormOpen(false);
+      setLinksOpen(true);
+      toast("Tautan disimpan");
+    } catch {
+      toast("Masukkan URL yang valid (http atau https)", "err");
+    }
+  }
+
+  function removeSavedLink(id: string) {
+    setSavedLinks((links) => links.filter((link) => link.id !== id));
   }
 
   async function onUpload(files: FileList | File[]) {
@@ -356,15 +423,25 @@ export default function GalleryApp() {
     if (next) openViewer(next);
   }
 
-  async function dropOnFolder(folderPath: string, itemPath: string) {
-    if (folderPath === itemPath) return;
-    if (!window.confirm(`Pindahkan item ke folder ini?`)) return;
+  function startItemDrag(e: DragEvent<HTMLElement>, itemPath: string) {
+    const paths = selected.has(itemPath) ? [...selected] : [itemPath];
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("application/x-gallery-paths", JSON.stringify(paths));
+    e.dataTransfer.setData("text/path", itemPath);
+  }
+
+  async function dropOnFolder(folderPath: string, itemPaths: string[]) {
+    const paths = itemPaths.filter((itemPath) => itemPath !== folderPath);
+    if (!paths.length) return;
     try {
-      await galleryApi.move([itemPath], folderPath);
-      toast("Dipindahkan");
+      await galleryApi.move(paths, folderPath);
+      toast(`${paths.length} item dipindahkan`);
+      setSelected(new Set());
       await load(path, 1, false);
     } catch (err) {
       toast(err instanceof Error ? err.message : "Gagal", "err");
+    } finally {
+      setDropTarget(null);
     }
   }
 
@@ -394,22 +471,26 @@ export default function GalleryApp() {
   }
 
   return (
-    <div className="min-h-screen flex bg-ink-950" onDragOver={(e) => e.preventDefault()} onDrop={onDropFiles}>
+    <div className="gallery-shell min-h-screen flex" onDragOver={(e) => e.preventDefault()} onDrop={onDropFiles}>
       <aside
-        className={`fixed inset-y-0 left-0 z-30 w-72 border-r border-white/10 bg-ink-900 p-4 transition-transform md:static md:translate-x-0 ${
+        className={`gallery-sidebar fixed inset-y-0 left-0 z-30 flex w-72 flex-col overflow-y-auto border-r p-4 transition-transform md:static md:translate-x-0 ${
           sidebar ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-blue-300/80">Gallery</p>
-            <h1 className="text-lg font-semibold">Personal Library</h1>
+        <div className="flex items-center justify-between gap-3 px-1">
+          <div className="flex items-center gap-3">
+            <div className="grid h-10 w-10 place-items-center rounded-xl bg-lime-300 text-lg font-semibold text-ink-950 shadow-lg shadow-lime-950/20">G</div>
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.22em] text-lime-200/70">Gallery</p>
+              <h1 className="text-sm font-semibold tracking-wide">Personal Library</h1>
+            </div>
           </div>
           <button className="md:hidden" onClick={() => setSidebar(false)} aria-label="Tutup menu">
             <X size={18} />
           </button>
         </div>
-        <nav className="mt-6 space-y-1 text-sm">
+        <p className="mb-2 mt-9 px-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-600">Library</p>
+        <nav className="space-y-1 text-sm">
           <SideBtn active={filter === "all"} onClick={() => { setFilter("all"); setPath("/"); setSearchHits(null); }}>
             <HardDrive size={16} /> All Photos
           </SideBtn>
@@ -420,16 +501,66 @@ export default function GalleryApp() {
             <ImageIcon size={16} /> Folders
           </SideBtn>
         </nav>
-        <div className="mt-6 space-y-2">
-          <button onClick={openFolderCreate} className="w-full rounded-lg bg-white/5 px-3 py-2 text-left text-sm hover:bg-white/10">
-            + New Folder
+        <section className="mt-7 border-t border-white/[0.06] pt-4">
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              aria-expanded={linksOpen}
+              onClick={() => setLinksOpen((open) => !open)}
+              className="flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-2 text-left text-sm font-medium text-zinc-300 transition hover:bg-white/[0.04] hover:text-white"
+            >
+              <Link2 size={15} className="shrink-0 text-lime-200" />
+              <span className="flex-1 truncate">Tautan tersimpan</span>
+              <span className="text-[10px] text-zinc-600">{savedLinks.length}</span>
+              <ChevronDown size={15} className={`text-zinc-500 transition-transform ${linksOpen ? "rotate-180" : ""}`} />
+            </button>
+            <button
+              type="button"
+              title="Tambah tautan"
+              aria-label="Tambah tautan"
+              onClick={() => { setLinkFormOpen((open) => !open); setLinksOpen(true); }}
+              className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-zinc-400 transition hover:bg-lime-200/10 hover:text-lime-200"
+            >
+              <Plus size={16} />
+            </button>
+          </div>
+          {linksOpen ? (
+            <div className="mt-1 space-y-1 pl-1">
+              {savedLinks.map((link) => (
+                <div key={link.id} className="group flex min-w-0 items-center gap-1 rounded-lg px-2 py-1 hover:bg-white/[0.04]">
+                  <a href={link.url} target="_blank" rel="noopener noreferrer" title={link.url} className="flex min-w-0 flex-1 items-center gap-2 py-1 text-xs text-zinc-400 hover:text-lime-100">
+                    <ExternalLink size={13} className="shrink-0 text-zinc-600 group-hover:text-lime-200" />
+                    <span className="truncate">{link.title}</span>
+                  </a>
+                  <button type="button" title={`Hapus ${link.title}`} aria-label={`Hapus ${link.title}`} onClick={() => removeSavedLink(link.id)} className="grid h-7 w-7 shrink-0 place-items-center rounded text-zinc-600 opacity-0 transition hover:bg-red-400/10 hover:text-red-200 focus:opacity-100 group-hover:opacity-100">
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+              ))}
+              {savedLinks.length === 0 && !linkFormOpen ? <p className="px-3 py-2 text-xs text-zinc-600">Belum ada tautan</p> : null}
+              {linkFormOpen ? (
+                <form onSubmit={addSavedLink} className="mt-2 space-y-2 rounded-xl border border-white/[0.08] bg-black/15 p-3">
+                  <input value={linkTitle} onChange={(e) => setLinkTitle(e.target.value)} placeholder="Nama tautan" className="w-full rounded-lg border border-white/10 bg-black/20 px-2.5 py-2 text-xs text-zinc-100 placeholder:text-zinc-600 focus:border-lime-300/50 focus:outline-none" />
+                  <input type="url" value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)} placeholder="https://contoh.com" required className="w-full rounded-lg border border-white/10 bg-black/20 px-2.5 py-2 text-xs text-zinc-100 placeholder:text-zinc-600 focus:border-lime-300/50 focus:outline-none" />
+                  <div className="flex justify-end gap-2 pt-1">
+                    <button type="button" onClick={() => setLinkFormOpen(false)} className="rounded-md px-2 py-1.5 text-xs text-zinc-500 hover:text-zinc-200">Batal</button>
+                    <button type="submit" className="rounded-md bg-lime-300 px-2.5 py-1.5 text-xs font-semibold text-ink-950 hover:bg-lime-200">Simpan</button>
+                  </div>
+                </form>
+              ) : null}
+            </div>
+          ) : null}
+        </section>
+        <div className="mt-7 space-y-2 border-t border-white/[0.06] pt-5">
+          <button onClick={() => fileRef.current?.click()} className="gallery-action-primary flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold">
+            <ArrowUpFromLine size={16} /> Upload media
           </button>
-          <button onClick={() => fileRef.current?.click()} className="w-full rounded-lg bg-blue-500/90 px-3 py-2 text-left text-sm hover:bg-blue-400">
-            ↑ Upload
+          <button onClick={openFolderCreate} className="gallery-action-secondary flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm">
+            <FolderPlus size={16} /> New folder
           </button>
         </div>
-        <div className="absolute bottom-4 left-4 right-4 space-y-2 text-sm">
-          <button onClick={() => setDialog({ kind: "settings" })} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-zinc-300 hover:bg-white/5">
+        <div className="mt-auto space-y-2 pt-7 text-sm">
+          <button onClick={() => setDialog({ kind: "settings" })} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-zinc-400 transition hover:bg-white/5 hover:text-white">
             <Settings size={16} /> Settings
           </button>
           <button
@@ -437,7 +568,7 @@ export default function GalleryApp() {
               await galleryApi.logout();
               router.replace("/login");
             }}
-            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-zinc-300 hover:bg-white/5"
+            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-zinc-400 transition hover:bg-white/5 hover:text-white"
           >
             <LogOut size={16} /> Logout ({username})
           </button>
@@ -447,33 +578,33 @@ export default function GalleryApp() {
       {sidebar ? <div className="fixed inset-0 z-20 bg-black/50 md:hidden" onClick={() => setSidebar(false)} /> : null}
 
       <main className="flex-1 min-w-0 flex flex-col">
-        <header className="flex flex-wrap items-center gap-3 border-b border-white/10 px-4 py-3">
+        <header className="gallery-header sticky top-0 z-20 flex flex-wrap items-center gap-3 border-b px-4 py-3 md:px-6">
           <button className="md:hidden" onClick={() => setSidebar(true)} aria-label="Menu">
             <Menu />
           </button>
-          <nav className="flex flex-1 flex-wrap items-center gap-1 text-sm text-zinc-400">
+          <nav className="flex min-w-0 flex-1 flex-wrap items-center gap-1 text-sm text-zinc-500">
             {crumbs.map((c, i) => (
               <span key={c.value + i} className="flex items-center gap-1">
                 {i > 0 ? <span>/</span> : null}
-                <button className="hover:text-white" onClick={() => { setSearch(""); setSearchHits(null); setPath(c.value); }}>
+                <button className={`truncate transition hover:text-lime-200 ${i === crumbs.length - 1 ? "max-w-40 font-medium text-zinc-100" : "max-w-24"}`} onClick={() => { setSearch(""); setSearchHits(null); setPath(c.value); }}>
                   {c.label}
                 </button>
               </span>
             ))}
           </nav>
-          <label className="relative">
+          <label className="gallery-search relative w-full sm:w-auto">
             <Search size={14} className="absolute left-2 top-2.5 text-zinc-500" />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Cari nama file atau folder"
-              className="w-52 rounded-lg border border-white/10 bg-ink-900 py-2 pl-7 pr-3 text-sm outline-none focus:border-blue-400"
+              className="w-full rounded-xl py-2 pl-8 pr-3 text-sm sm:w-52"
             />
           </label>
           <select
             value={sort}
             onChange={(e) => setSort(e.target.value)}
-            className="rounded-lg border border-white/10 bg-ink-900 px-2 py-2 text-sm"
+            className="gallery-control rounded-xl px-3 py-2 text-sm"
           >
             {SORTS.map((s) => (
               <option key={s.id} value={s.id}>
@@ -481,31 +612,31 @@ export default function GalleryApp() {
               </option>
             ))}
           </select>
-          <button onClick={selectAll} className="rounded-lg border border-white/10 px-3 py-2 text-sm hover:bg-white/5">
+          <button onClick={selectAll} className="gallery-action-secondary rounded-xl px-3 py-2 text-sm">
             <CheckSquare size={14} className="inline mr-1" /> Select
           </button>
-          <button onClick={() => fileRef.current?.click()} className="rounded-lg bg-blue-500 px-3 py-2 text-sm hover:bg-blue-400">
+          <button onClick={() => fileRef.current?.click()} className="gallery-action-primary rounded-xl px-3 py-2 text-sm font-semibold sm:hidden">
             <ArrowUpFromLine size={14} className="inline mr-1" /> Upload
           </button>
-          <button onClick={openFolderCreate} className="rounded-lg border border-white/10 px-3 py-2 text-sm hover:bg-white/5">
+          <button onClick={openFolderCreate} className="gallery-action-secondary hidden rounded-xl px-3 py-2 text-sm sm:inline-flex sm:items-center">
             <FolderPlus size={14} className="inline mr-1" /> Folder
           </button>
         </header>
 
         {selected.size > 0 ? (
-          <div className="flex flex-wrap items-center gap-2 border-b border-white/10 bg-ink-900 px-4 py-2 text-sm">
-            <span>{selected.size} dipilih</span>
-            <button className="rounded bg-white/10 px-2 py-1" onClick={() => void downloadSelected()}>Download</button>
-            <button className="rounded bg-white/10 px-2 py-1" onClick={() => void openMove()}>Move</button>
-            <button className="rounded bg-white/10 px-2 py-1" onClick={() => void openDelete()}>Delete</button>
+          <div className="flex flex-wrap items-center gap-2 border-b border-white/[0.08] bg-lime-300/[0.06] px-4 py-2.5 text-sm md:px-6">
+            <span className="mr-2 font-medium text-lime-100">{selected.size} dipilih</span>
+            <button className="gallery-action-secondary rounded-lg px-3 py-1.5" onClick={() => void downloadSelected()}>Download</button>
+            <button className="gallery-action-secondary rounded-lg px-3 py-1.5" onClick={() => void openMove()}>Move</button>
+            <button className="rounded-lg border border-red-400/20 bg-red-400/10 px-3 py-1.5 text-red-200 hover:bg-red-400/20" onClick={() => void openDelete()}>Delete</button>
             {selected.size === 1 ? (
-              <button className="rounded bg-white/10 px-2 py-1" onClick={() => void openRename()}>Rename</button>
+              <button className="gallery-action-secondary rounded-lg px-3 py-1.5" onClick={() => void openRename()}>Rename</button>
             ) : null}
-            <button className="rounded bg-white/10 px-2 py-1" onClick={() => setSelected(new Set())}>Cancel</button>
+            <button className="ml-auto rounded-lg px-3 py-1.5 text-zinc-400 hover:bg-white/5 hover:text-white" onClick={() => setSelected(new Set())}>Cancel</button>
           </div>
         ) : null}
 
-        <div ref={dropRef} className="flex-1 overflow-auto p-4">
+        <div ref={dropRef} className="flex-1 overflow-auto p-4 md:px-6 md:py-6">
           {loading && !data ? (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
               {Array.from({ length: 12 }).map((_, i) => (
@@ -523,31 +654,55 @@ export default function GalleryApp() {
 
           {folders.length > 0 ? (
             <section className="mb-6">
-              <h2 className="mb-3 text-sm uppercase tracking-wide text-zinc-500">Folders</h2>
+              <h2 className="gallery-section-title mb-3 text-[11px] font-semibold uppercase">Folders <span className="ml-1 text-zinc-600">{folders.length}</span></h2>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
                 {folders.map((f) => (
                   <button
                     key={f.path}
                     draggable
-                    onDragStart={(e) => e.dataTransfer.setData("text/path", f.path)}
-                    onDragOver={(e) => e.preventDefault()}
+                    onDragStart={(e) => startItemDrag(e, f.path)}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = "move";
+                      setDropTarget(f.path);
+                    }}
+                    onDragLeave={(e) => {
+                      if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropTarget(null);
+                    }}
                     onDrop={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
-                      const src = e.dataTransfer.getData("text/path");
-                      if (src) void dropOnFolder(f.path, src);
+                      const payload = e.dataTransfer.getData("application/x-gallery-paths");
+                      let paths: string[] = [];
+                      try {
+                        const parsed: unknown = JSON.parse(payload);
+                        if (Array.isArray(parsed)) paths = parsed.filter((item): item is string => typeof item === "string");
+                      } catch {
+                        paths = [];
+                      }
+                      if (!paths.length) {
+                        const source = e.dataTransfer.getData("text/path");
+                        if (source) paths = [source];
+                      }
+                      if (paths.length) void dropOnFolder(f.path, paths);
+                      else setDropTarget(null);
                     }}
                     onClick={(e) => {
                       if (e.ctrlKey || e.metaKey) toggleSelect(f.path, true);
                       else openViewer(f);
                     }}
-                    className={`rounded-xl border p-4 text-left hover:border-blue-400 ${
-                      selected.has(f.path) ? "border-blue-400 bg-blue-500/10" : "border-white/10 bg-ink-900"
+                    className={`folder-card rounded-2xl border p-4 text-left ${
+                      dropTarget === f.path ? "is-drop-target" : selected.has(f.path) ? "is-selected" : ""
                     }`}
                   >
-                    <div className="text-3xl">📁</div>
-                    <div className="mt-2 truncate font-medium">{f.name}</div>
-                    <div className="text-xs text-zinc-500">{f.childCount ?? 0} item</div>
+                    <div className="flex items-center justify-between">
+                      <div className={`grid h-10 w-10 place-items-center rounded-xl ${dropTarget === f.path ? "bg-emerald-200/15 text-emerald-200" : "bg-lime-200/10 text-lime-200"}`}>
+                        <Folder size={21} strokeWidth={1.8} />
+                      </div>
+                      <span className="text-[10px] font-medium tracking-wider text-zinc-600">FOLDER</span>
+                    </div>
+                    <div className="mt-4 truncate font-medium text-zinc-100">{f.name}</div>
+                    <div className="mt-1 text-xs text-zinc-500">{f.childCount ?? 0} item</div>
                   </button>
                 ))}
               </div>
@@ -556,19 +711,19 @@ export default function GalleryApp() {
 
           {mediaItems.length > 0 && filter !== "folders" ? (
             <section>
-              <h2 className="mb-3 text-sm uppercase tracking-wide text-zinc-500">Media</h2>
+              <h2 className="gallery-section-title mb-3 text-[11px] font-semibold uppercase">Media <span className="ml-1 text-zinc-600">{mediaItems.length}</span></h2>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8">
                 {mediaItems.map((item) => (
                   <article
                     key={item.path}
                     draggable
-                    onDragStart={(e) => e.dataTransfer.setData("text/path", item.path)}
+                    onDragStart={(e) => startItemDrag(e, item.path)}
                     onClick={(e) => {
                       if (e.ctrlKey || e.metaKey) toggleSelect(item.path, true);
                       else openViewer(item);
                     }}
-                    className={`group relative aspect-square overflow-hidden rounded-lg border ${
-                      selected.has(item.path) ? "border-blue-400 ring-2 ring-blue-400" : "border-transparent"
+                    className={`media-card group relative aspect-square overflow-hidden rounded-xl border ${
+                      selected.has(item.path) ? "is-selected" : "border-transparent"
                     }`}
                   >
                     <label className="absolute left-2 top-2 z-10" onClick={(e) => e.stopPropagation()}>
@@ -576,6 +731,7 @@ export default function GalleryApp() {
                         type="checkbox"
                         checked={selected.has(item.path)}
                         onChange={() => toggleSelect(item.path, true)}
+                        className="h-4 w-4 cursor-pointer accent-lime-300"
                       />
                     </label>
                     {item.type === "image" || item.type === "video" ? (
@@ -585,10 +741,11 @@ export default function GalleryApp() {
                       <div className="grid h-full place-items-center bg-ink-800 text-xs">{item.name}</div>
                     )}
                     {item.type === "video" ? (
-                      <span className="absolute bottom-2 right-2 rounded bg-black/70 px-1.5 text-xs">VID</span>
+                      <span className="absolute right-2 top-2 rounded-md border border-white/15 bg-black/60 px-1.5 py-1 text-[9px] font-semibold tracking-wider text-white backdrop-blur">VIDEO</span>
                     ) : null}
-                    <div className="pointer-events-none absolute inset-x-0 bottom-0 hidden bg-gradient-to-t from-black/80 p-2 text-xs group-hover:block">
-                      {item.name}
+                    <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/45 to-transparent px-2.5 pb-2.5 pt-10 text-xs">
+                      <p className="truncate font-medium text-white">{item.name}</p>
+                      <p className="mt-0.5 text-[10px] text-white/60">{formatBytes(item.size)}</p>
                     </div>
                   </article>
                 ))}
@@ -684,7 +841,7 @@ export default function GalleryApp() {
 
       {dialog ? (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4">
-          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-ink-900 p-5">
+          <div className="gallery-dialog w-full max-w-md rounded-2xl border p-5">
             {dialog.kind === "folder" ? (
               <>
                 <h3 className="text-lg font-medium">Folder baru</h3>
@@ -749,7 +906,7 @@ function SideBtn({ active, onClick, children }: { active: boolean; onClick: () =
   return (
     <button
       onClick={onClick}
-      className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left ${active ? "bg-blue-500/20 text-blue-100" : "hover:bg-white/5"}`}
+      className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left transition ${active ? "bg-lime-200/10 text-lime-100 ring-1 ring-lime-200/10" : "text-zinc-400 hover:bg-white/5 hover:text-zinc-100"}`}
     >
       {children}
     </button>
@@ -773,7 +930,7 @@ function DialogActions({
         Batal
       </button>
       {onOk ? (
-        <button onClick={onOk} className={`rounded-lg px-3 py-2 text-sm ${danger ? "bg-red-500" : "bg-blue-500"}`}>
+        <button onClick={onOk} className={`rounded-lg px-3 py-2 text-sm font-medium ${danger ? "bg-red-500 text-white hover:bg-red-400" : "bg-lime-300 text-ink-950 hover:bg-lime-200"}`}>
           {ok}
         </button>
       ) : null}
