@@ -33,6 +33,7 @@ import {
   Video,
   X,
 } from "lucide-react";
+import { SiInstagram, SiTiktok } from "react-icons/si";
 import { fileUrl, formatBytes, formatDate, galleryApi, thumbUrl, type TreeNode } from "@/lib/api";
 import type { BrowseResult, GalleryItem } from "@/lib/types";
 
@@ -915,6 +916,14 @@ export default function GalleryApp() {
                   <div>
                     <h3 className="text-lg font-medium">Download dari link</h3>
                     <p className="mt-1 text-xs leading-relaxed text-zinc-500">Video publik dari TikTok atau Instagram. Maksimal 512 MB dan 5 menit.</p>
+                    <div className="mt-2 flex items-center gap-2">
+                      <span className="inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.035] px-2 py-1 text-[10px] text-zinc-300">
+                        <SiTiktok size={12} aria-hidden="true" /> TikTok
+                      </span>
+                      <span className="inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.035] px-2 py-1 text-[10px] text-zinc-300">
+                        <SiInstagram size={12} className="text-pink-300" aria-hidden="true" /> Instagram
+                      </span>
+                    </div>
                   </div>
                 </div>
                 <label className="mt-5 block text-xs font-medium text-zinc-400">

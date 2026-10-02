@@ -7,7 +7,10 @@ RUN go mod tidy && CGO_ENABLED=0 GOOS=linux go build -o /out/server ./cmd/server
 
 FROM debian:bookworm-slim
 RUN apt-get update \
-      && apt-get install -y --no-install-recommends ca-certificates ffmpeg curl yt-dlp \
+    && apt-get install -y --no-install-recommends ca-certificates ffmpeg curl python3 python3-venv \
+    && python3 -m venv /opt/yt-dlp \
+    && /opt/yt-dlp/bin/pip install --no-cache-dir --upgrade yt-dlp \
+    && ln -s /opt/yt-dlp/bin/yt-dlp /usr/local/bin/yt-dlp \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /data/app /data/cache
 WORKDIR /app
