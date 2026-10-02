@@ -7,7 +7,7 @@ RUN go mod tidy && CGO_ENABLED=0 GOOS=linux go build -o /out/server ./cmd/server
 
 FROM debian:bookworm-slim
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates ffmpeg curl \
+      && apt-get install -y --no-install-recommends ca-certificates ffmpeg curl yt-dlp \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /data/app /data/cache
 WORKDIR /app

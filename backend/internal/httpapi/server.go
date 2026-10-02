@@ -55,6 +55,7 @@ func New(cfg config.Config, authSvc *auth.Service, gal *gallery.Service, thumbs 
 			authed.GET("/gallery/folder/stats", s.folderStats)
 			authed.POST("/gallery/folder", s.createFolder)
 			authed.POST("/gallery/upload", s.upload)
+			authed.POST("/gallery/download-social", s.downloadSocial)
 			authed.POST("/gallery/rename", s.rename)
 			authed.POST("/gallery/move", s.move)
 			authed.POST("/gallery/scan", s.scan)

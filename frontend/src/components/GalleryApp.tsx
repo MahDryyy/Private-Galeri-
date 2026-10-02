@@ -3,6 +3,7 @@
 import {
   type ChangeEvent,
   type DragEvent,
+  type FormEvent,
   type ReactNode,
   useCallback,
   useEffect,
@@ -15,6 +16,7 @@ import {
   ArrowUpFromLine,
   ChevronDown,
   CheckSquare,
+  Download,
   ExternalLink,
   Folder,
   FolderPlus,
@@ -22,6 +24,7 @@ import {
   Image as ImageIcon,
   Link2,
   LogOut,
+  LoaderCircle,
   Menu,
   Plus,
   Search,
@@ -63,7 +66,7 @@ export default function GalleryApp() {
   const [sidebar, setSidebar] = useState(false);
   const [viewer, setViewer] = useState<GalleryItem | null>(null);
   const [uploads, setUploads] = useState<UploadJob[]>([]);
-  const [dialog, setDialog] = useState<null | { kind: "folder" | "rename" | "move" | "delete" | "settings" }>(null);
+  const [dialog, setDialog] = useState<null | { kind: "folder" | "rename" | "move" | "delete" | "settings" | "socialDownload" }>(null);
   const [nameInput, setNameInput] = useState("");
   const [renameTarget, setRenameTarget] = useState<GalleryItem | null>(null);
   const [tree, setTree] = useState<TreeNode | null>(null);
@@ -75,6 +78,9 @@ export default function GalleryApp() {
   const [linkFormOpen, setLinkFormOpen] = useState(false);
   const [linkTitle, setLinkTitle] = useState("");
   const [linkUrl, setLinkUrl] = useState("");
+  const [socialUrl, setSocialUrl] = useState("");
+  const [socialDestination, setSocialDestination] = useState("/");
+  const [socialDownloading, setSocialDownloading] = useState(false);
   const [deleteMsg, setDeleteMsg] = useState("");
   const [meta, setMeta] = useState<GalleryItem | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -212,7 +218,7 @@ export default function GalleryApp() {
     setSelected(new Set(all));
   }
 
-  function addSavedLink(e: React.FormEvent<HTMLFormElement>) {
+  function addSavedLink(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const value = linkUrl.trim();
     try {
@@ -235,6 +241,35 @@ export default function GalleryApp() {
 
   function removeSavedLink(id: string) {
     setSavedLinks((links) => links.filter((link) => link.id !== id));
+  }
+
+  async function openSocialDownload(initialUrl = "") {
+    try {
+      setTree(await galleryApi.tree());
+      setSocialUrl(initialUrl);
+      setSocialDestination(path);
+      setDialog({ kind: "socialDownload" });
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Gagal memuat folder", "err");
+    }
+  }
+
+  async function submitSocialDownload(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setSocialDownloading(true);
+    try {
+      const result = await galleryApi.downloadSocial(socialUrl.trim(), socialDestination);
+      toast(`Video disimpan: ${result.path}`);
+      setDialog(null);
+      setSearch("");
+      setSearchHits(null);
+      setPath(socialDestination);
+      await load(socialDestination, 1, false);
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Download gagal", "err");
+    } finally {
+      setSocialDownloading(false);
+    }
   }
 
   async function onUpload(files: FileList | File[]) {
@@ -532,6 +567,9 @@ export default function GalleryApp() {
                     <ExternalLink size={13} className="shrink-0 text-zinc-600 group-hover:text-lime-200" />
                     <span className="truncate">{link.title}</span>
                   </a>
+                  <button type="button" title={`Download ${link.title} ke galeri`} aria-label={`Download ${link.title} ke galeri`} onClick={() => void openSocialDownload(link.url)} className="grid h-7 w-7 shrink-0 place-items-center rounded text-zinc-600 transition hover:bg-lime-200/10 hover:text-lime-200">
+                    <Download size={13} />
+                  </button>
                   <button type="button" title={`Hapus ${link.title}`} aria-label={`Hapus ${link.title}`} onClick={() => removeSavedLink(link.id)} className="grid h-7 w-7 shrink-0 place-items-center rounded text-zinc-600 opacity-0 transition hover:bg-red-400/10 hover:text-red-200 focus:opacity-100 group-hover:opacity-100">
                     <Trash2 size={13} />
                   </button>
@@ -614,6 +652,9 @@ export default function GalleryApp() {
           </select>
           <button onClick={selectAll} className="gallery-action-secondary rounded-xl px-3 py-2 text-sm">
             <CheckSquare size={14} className="inline mr-1" /> Select
+          </button>
+          <button onClick={() => void openSocialDownload()} className="gallery-action-secondary rounded-xl px-3 py-2 text-sm">
+            <Link2 size={14} className="mr-1 inline" /> Dari link
           </button>
           <button onClick={() => fileRef.current?.click()} className="gallery-action-primary rounded-xl px-3 py-2 text-sm font-semibold sm:hidden">
             <ArrowUpFromLine size={14} className="inline mr-1" /> Upload
@@ -864,6 +905,44 @@ export default function GalleryApp() {
                 </div>
                 <DialogActions onCancel={() => setDialog(null)} onOk={submitMove} ok="Pindahkan" />
               </>
+            ) : null}
+            {dialog.kind === "socialDownload" ? (
+              <form onSubmit={(e) => void submitSocialDownload(e)}>
+                <div className="flex items-start gap-3">
+                  <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-lime-200/10 text-lime-200">
+                    <Link2 size={19} />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-medium">Download dari link</h3>
+                    <p className="mt-1 text-xs leading-relaxed text-zinc-500">Video publik dari TikTok atau Instagram. Maksimal 512 MB dan 5 menit.</p>
+                  </div>
+                </div>
+                <label className="mt-5 block text-xs font-medium text-zinc-400">
+                  Link post atau reel
+                  <input
+                    type="url"
+                    required
+                    value={socialUrl}
+                    onChange={(e) => setSocialUrl(e.target.value)}
+                    placeholder="https://www.tiktok.com/@.../video/..."
+                    disabled={socialDownloading}
+                    className="mt-2 w-full rounded-lg border border-white/10 bg-ink-950 px-3 py-2.5 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-lime-300/50 focus:outline-none disabled:opacity-60"
+                  />
+                </label>
+                <div className="mt-4">
+                  <p className="mb-2 text-xs font-medium text-zinc-400">Simpan ke folder</p>
+                  <div className="max-h-44 overflow-auto rounded-lg border border-white/10 p-2 text-sm">
+                    {tree ? <TreePick node={tree} selected={socialDestination} onPick={setSocialDestination} /> : null}
+                  </div>
+                </div>
+                <div className="mt-5 flex justify-end gap-2">
+                  <button type="button" disabled={socialDownloading} onClick={() => setDialog(null)} className="rounded-lg px-3 py-2 text-sm text-zinc-400 hover:bg-white/5 disabled:opacity-50">Batal</button>
+                  <button type="submit" disabled={socialDownloading} className="flex items-center gap-2 rounded-lg bg-lime-300 px-3 py-2 text-sm font-medium text-ink-950 hover:bg-lime-200 disabled:cursor-wait disabled:opacity-60">
+                    {socialDownloading ? <LoaderCircle size={15} className="animate-spin" /> : <ArrowUpFromLine size={15} />}
+                    {socialDownloading ? "Mengunduh..." : "Download"}
+                  </button>
+                </div>
+              </form>
             ) : null}
             {dialog.kind === "delete" ? (
               <>

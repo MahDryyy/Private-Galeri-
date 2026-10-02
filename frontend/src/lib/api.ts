@@ -42,6 +42,11 @@ export const galleryApi = {
     api<{ path: string }>("/api/gallery/rename", { method: "POST", body: JSON.stringify({ path, newName }) }),
   move: (paths: string[], destination: string) =>
     api("/api/gallery/move", { method: "POST", body: JSON.stringify({ paths, destination }) }),
+  downloadSocial: (url: string, destination: string) =>
+    api<{ path: string }>("/api/gallery/download-social", {
+      method: "POST",
+      body: JSON.stringify({ url, destination }),
+    }),
   remove: (paths: string[]) =>
     api("/api/gallery/items", { method: "DELETE", body: JSON.stringify({ paths }) }),
   folderStats: (path: string) => api<{ count: number }>(`/api/gallery/folder/stats?path=${encodeURIComponent(path)}`),

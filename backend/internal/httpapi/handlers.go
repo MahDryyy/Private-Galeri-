@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"errors"
 	"io"
 	"net/http"
@@ -16,6 +17,7 @@ import (
 	"github.com/secreat/personal-gallery/internal/config"
 	"github.com/secreat/personal-gallery/internal/fsutil"
 	"github.com/secreat/personal-gallery/internal/gallery"
+	"github.com/secreat/personal-gallery/internal/socialdownload"
 )
 
 func (s *Server) login(c *gin.Context) {
@@ -148,8 +150,8 @@ func (s *Server) rename(c *gin.Context) {
 
 func (s *Server) move(c *gin.Context) {
 	var body struct {
-		Paths      []string `json:"paths"`
-		Destination string  `json:"destination"`
+		Paths       []string `json:"paths"`
+		Destination string   `json:"destination"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil || len(body.Paths) == 0 {
 		Fail(c, http.StatusBadRequest, "Invalid request")
@@ -244,6 +246,78 @@ func (s *Server) upload(c *gin.Context) {
 	u, _ := currentUser(c)
 	audit.Log("UPLOAD", u.Username, dest+" "+strings.Join(saved, ","))
 	OK(c, gin.H{"paths": saved})
+}
+
+func (s *Server) downloadSocial(c *gin.Context) {
+	var body struct {
+		URL         string `json:"url"`
+		Destination string `json:"destination"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil || body.URL == "" {
+		Fail(c, http.StatusBadRequest, "Link tidak valid")
+		return
+	}
+	if err := socialdownload.ValidateURL(body.URL); err != nil {
+		Fail(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	dest, err := s.Gallery.Resolver.Resolve(body.Destination)
+	if err != nil {
+		mapFSError(c, err)
+		return
+	}
+	destInfo, err := os.Stat(dest)
+	if err != nil {
+		mapFSError(c, err)
+		return
+	}
+	if !destInfo.IsDir() {
+		Fail(c, http.StatusBadRequest, "Folder tujuan tidak valid")
+		return
+	}
+
+	tmpDir, err := os.MkdirTemp("", "personal-gallery-download-")
+	if err != nil {
+		Fail(c, http.StatusInternalServerError, "Gagal menyiapkan download")
+		return
+	}
+	defer os.RemoveAll(tmpDir)
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), socialdownload.MaxDuration)
+	defer cancel()
+	outPath, err := socialdownload.Download(ctx, body.URL, tmpDir)
+	if err != nil {
+		switch {
+		case errors.Is(err, socialdownload.ErrUnavailable):
+			Fail(c, http.StatusServiceUnavailable, "Downloader belum tersedia di server")
+		case errors.Is(err, socialdownload.ErrNoMedia):
+			Fail(c, http.StatusUnprocessableEntity, "Tidak ada video yang bisa diunduh dari link ini")
+		case errors.Is(ctx.Err(), context.DeadlineExceeded):
+			Fail(c, http.StatusGatewayTimeout, "Download melewati batas waktu")
+		default:
+			Fail(c, http.StatusBadGateway, "Gagal mengunduh. Pastikan konten publik dan link didukung.")
+		}
+		return
+	}
+	file, err := os.Open(outPath)
+	if err != nil {
+		Fail(c, http.StatusInternalServerError, "Gagal membaca hasil download")
+		return
+	}
+	savedPath, err := s.Gallery.SaveUpload(body.Destination, filepath.Base(outPath), file, socialdownload.MaxDownloadSize)
+	_ = file.Close()
+	if err != nil {
+		if errors.Is(err, gallery.ErrTooLarge) {
+			Fail(c, http.StatusRequestEntityTooLarge, "Video melebihi batas 512 MB")
+			return
+		}
+		mapFSError(c, err)
+		return
+	}
+	if u, ok := currentUser(c); ok {
+		audit.Log("SOCIAL_DOWNLOAD", u.Username, savedPath)
+	}
+	OK(c, gin.H{"path": savedPath})
 }
 
 func (s *Server) file(c *gin.Context) {
